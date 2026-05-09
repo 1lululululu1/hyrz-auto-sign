@@ -48,23 +48,23 @@ POST https://x8m8.ams.game.qq.com/ams/ame/amesvr?ameVersion=0.3&sServiceType=hyr
 ## JSON 格式
 
 ```json
-[
-  {
+{
+  "1050194": {
     "openid": "xxx",
     "acctype": "qc",
     "appid": "xxx",
     "access_token": "xxx"
   },
-  {
+  "1985123": {
     "openid": "yyy",
     "acctype": "qc",
     "appid": "yyy",
     "access_token": "yyy"
   }
-]
+}
 ```
 
-每个数组元素代表一个账号，只需 Cookie 中的四个字段。
+每个 key 为账号 ID（用于通知显示），value 为 Cookie 中的四个字段。
 
 ## 脚本逻辑
 
