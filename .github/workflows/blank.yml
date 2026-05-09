@@ -22,5 +22,6 @@ jobs:
       - name: 执行多账号签到
         env:
           GAME_ACCOUNTS: ${{ secrets.GAME_ACCOUNTS }}
+          FEISHU_WEBHOOK: ${{ secrets.FEISHU_WEBHOOK }}
         run: |
           python game_sign.py
