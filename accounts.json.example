@@ -1,4 +1,4 @@
-[
+{
   "1050194":{
     "openid": "aaa1",
     "acctype": "qc",
@@ -11,4 +11,4 @@
     "appid": "bbb2",
     "access_token": "ccc2"
   }
-]
+}

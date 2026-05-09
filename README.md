@@ -69,11 +69,11 @@ POST https://x8m8.ams.game.qq.com/ams/ame/amesvr?ameVersion=0.3&sServiceType=hyr
 ## 脚本逻辑
 
 1. 从环境变量 `GAME_ACCOUNTS` 读取 JSON 字符串
-2. 解析为账号列表
-3. 对每个账号组装 Cookie，执行 POST 请求
-4. 解析响应 `iRet` 字段判断成功/失败
+2. 解析为账号对象（key 为账号 ID）
+3. 遍历每个账号组装 Cookie，执行 POST 请求
+4. 解析 `modRet.iRet` 字段判断成功（`"0"`）/已签到（`"100012"`）/失败
 5. 将签到结果写入 `sign_result.txt` 文件
-6. 若设置了 `FEISHU_WEBHOOK` 环境变量，自动发送飞书群机器人通知
+6. 若设置了 `FEISHU_WEBHOOK` 环境变量，自动发送飞书群机器人通知（全部已签到时不发送明细）
 7. 有账号失败时以非零退出码结束
 
 ## GitHub Secrets 配置
