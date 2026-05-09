@@ -20,7 +20,6 @@ RESULT_FILE = "sign_result.txt"
 
 
 def send_feishu_notification(webhook_url, content):
-    """发送飞书机器人通知"""
     payload = json.dumps({
         "msg_type": "text",
         "content": {"text": content}
@@ -34,6 +33,32 @@ def send_feishu_notification(webhook_url, content):
             return resp.read().decode("utf-8")
     except Exception as e:
         return f"发送飞书通知失败: {e}"
+
+
+def parse_result(body):
+    """解析响应，返回 (status_type, message, gifts)"""
+    try:
+        data = json.loads(body)
+    except json.JSONDecodeError:
+        return "error", "响应非 JSON", ""
+
+    mod_ret = data.get("modRet", {})
+
+    # modRet.iRet 区分不同状态
+    ret_code = mod_ret.get("iRet")
+    ret_msg = mod_ret.get("sMsg", "")
+
+    # 提取奖励信息
+    jdata = mod_ret.get("jData", {})
+    gift_list = jdata.get("gift_list", {})
+    gifts = gift_list.get("sPackageName", "")
+
+    if ret_code == 0:
+        return "success", ret_msg, gifts
+    elif ret_code == 100012:
+        return "already", ret_msg, ""
+    else:
+        return "fail", ret_msg or f"未知错误 (code={ret_code})", ""
 
 
 def main():
@@ -54,6 +79,7 @@ def main():
 
     result_lines = []
     success_count = 0
+    already_count = 0
     fail_count = 0
 
     for idx, account in enumerate(accounts, start=1):
@@ -70,41 +96,58 @@ def main():
         req.add_header("X-WECHAT-HOSTSIGN", X_WECHAT_HOSTSIGN)
         req.add_header("Cookie", cookie)
 
-        line = f"账号{idx} ({openid[:8]}...)"
+        label = f"账号{idx} ({openid[:8]}...)"
         try:
             with urllib.request.urlopen(req, timeout=30) as resp:
                 body = resp.read().decode("utf-8")
-                result = json.loads(body)
-                if result.get("iRet") == 0:
-                    msg = f"✅ {line} 签到成功"
+                status, ret_msg, gifts = parse_result(body)
+
+                if status == "success":
+                    # 奖励简写：只取前两项
+                    gift_items = [g.strip() for g in gifts.split(",") if g.strip()]
+                    gift_short = "、".join(gift_items[:3])
+                    if len(gift_items) > 3:
+                        gift_short += f"等{len(gift_items)}项"
+                    msg = f"✅ {label} 签到成功 🎁{gift_short}" if gift_short else f"✅ {label} 签到成功"
+                    success_count += 1
+                elif status == "already":
+                    msg = f"⏭️ {label} 今日已签到"
+                    already_count += 1
                 else:
-                    msg = f"❌ {line} 失败: {result.get('sMsg', body[:100])}"
+                    msg = f"❌ {label} 失败: {ret_msg}"
+                    fail_count += 1
+
                 print(msg)
                 result_lines.append(msg)
-                success_count += 1
         except Exception as e:
-            msg = f"❌ {line} 请求异常: {e}"
+            msg = f"❌ {label} 请求异常: {e}"
             print(msg)
             result_lines.append(msg)
             fail_count += 1
 
     total = len(accounts)
-    summary = f"签到完成: 成功 {success_count} / 失败 {fail_count} / 总计 {total}"
+    summary_parts = []
+    if success_count:
+        summary_parts.append(f"✅ 新增 {success_count}")
+    if already_count:
+        summary_parts.append(f"⏭️ 已签 {already_count}")
+    if fail_count:
+        summary_parts.append(f"❌ 失败 {fail_count}")
+    summary_parts.append(f"总计 {total}")
+
+    summary = f"签到完成: {' / '.join(summary_parts)}"
     print(f"\n{summary}")
 
-    # 将结果写入文件，供后续通知步骤使用
     full_message = "\n".join(result_lines) + f"\n\n{summary}"
     with open(RESULT_FILE, "w", encoding="utf-8") as f:
         f.write(full_message)
 
-    # 如果设置了飞书 Webhook，直接发送通知
     feishu_webhook = os.environ.get("FEISHU_WEBHOOK")
     if feishu_webhook:
-        notify_msg = f"🎮 游戏签到通知\n\n" + full_message
+        notify_msg = f"🎮 游戏签到\n\n" + full_message
         resp = send_feishu_notification(feishu_webhook, notify_msg)
         print(f"飞书通知结果: {resp}")
 
-    # 如果有失败，退出码非零
     if fail_count > 0:
         sys.exit(1)
 
