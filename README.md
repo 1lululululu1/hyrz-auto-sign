@@ -71,14 +71,42 @@ POST https://x8m8.ams.game.qq.com/ams/ame/amesvr?ameVersion=0.3&sServiceType=hyr
 1. 从环境变量 `GAME_ACCOUNTS` 读取 JSON 字符串
 2. 解析为账号列表
 3. 对每个账号组装 Cookie，执行 POST 请求
-4. 打印每个账号的签到结果（成功/失败）
+4. 解析响应 `iRet` 字段判断成功/失败
+5. 将签到结果写入 `sign_result.txt` 文件
+6. 若设置了 `FEISHU_WEBHOOK` 环境变量，自动发送飞书群机器人通知
+7. 有账号失败时以非零退出码结束
 
 ## GitHub Secrets 配置
+
+需要在 GitHub Secrets 中配置以下两个变量：
+
+### GAME_ACCOUNTS
 
 1. 打开 GitHub 仓库 → **Settings** → **Secrets and variables** → **Actions**
 2. 点击 **New repository secret**
 3. **Name**: `GAME_ACCOUNTS`
-4. **Secret**: 填入上方 JSON 格式的完整账号数据
+4. **Secret**: 填入 JSON 格式的完整账号数据
+
+### FEISHU_WEBHOOK（可选）
+
+1. 在飞书群组中添加自定义机器人，获取 Webhook 地址
+2. 同样在 **Actions secrets** 中新增
+3. **Name**: `FEISHU_WEBHOOK`
+4. **Secret**: 飞书机器人 Webhook URL（如 `https://open.feishu.cn/open-apis/bot/v2/hook/xxx`）
+
+## 飞书通知效果
+
+签到完成后，飞书群机器人会发送如下格式的通知：
+
+```
+🎮 游戏签到通知
+
+✅ 账号1 (openid_abc...) 签到成功
+✅ 账号2 (openid_def...) 签到成功
+❌ 账号3 (openid_ghi...) 请求异常: ...
+
+签到完成: 成功 2 / 失败 1 / 总计 3
+```
 
 ## 工作流触发器
 
