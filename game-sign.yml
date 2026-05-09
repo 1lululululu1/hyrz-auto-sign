@@ -1,0 +1,26 @@
+name: 游戏自动签到
+
+on:
+  schedule:
+    - cron: '0 1 * * *'
+
+  workflow_dispatch:
+
+jobs:
+  game-sign:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 设置 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: 执行多账号签到
+        env:
+          GAME_ACCOUNTS: ${{ secrets.GAME_ACCOUNTS }}
+        run: |
+          python game_sign.py

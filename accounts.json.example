@@ -1,0 +1,14 @@
+[
+  {
+    "openid": "aaa1",
+    "acctype": "qc",
+    "appid": "bbb1",
+    "access_token": "ccc1"
+  },
+  {
+    "openid": "aaa2",
+    "acctype": "qc",
+    "appid": "bbb2",
+    "access_token": "ccc2"
+  }
+]
