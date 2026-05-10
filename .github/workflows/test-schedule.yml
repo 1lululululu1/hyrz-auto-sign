@@ -1,0 +1,15 @@
+name: Test Schedule
+
+on:
+  schedule:
+    - cron: '*/1 * * * *'  # 每5分钟
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Print Time
+        run: |
+          echo "🎉 Schedule is working! Time: $(date)"
+          echo "Event: ${{ github.event_name }}"
