@@ -6,6 +6,10 @@ on:
 
   workflow_dispatch:
 
+  # 🔑 新增：允许外部服务通过 API 触发（关键！）
+  repository_dispatch:
+    types: [cron_trigger]  # 事件类型，可自定义
+
 jobs:
   game-sign:
     runs-on: ubuntu-latest
