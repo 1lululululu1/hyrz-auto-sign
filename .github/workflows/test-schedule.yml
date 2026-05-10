@@ -2,9 +2,7 @@ name: Test Schedule
 
 on:
   schedule:
-    - cron: '*/1 * * * *'  # 每5分钟
-  workflow_dispatch:
-
+    - cron: '*/5 * * * *' 
 jobs:
   test:
     runs-on: ubuntu-latest
