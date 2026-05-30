@@ -266,11 +266,26 @@ def get_current_activity(account):
     if not is_extra_success(response_info):
         raise ValueError(response_info["summary"])
 
-    jdata = response_info["jdata"]
+    jdata = response_info["jData"]
     if not isinstance(jdata, dict):
         raise ValueError("获取当前活跃度响应缺少 jData")
 
-    return int(jdata.get("actIntegral", 0))
+    act_integral = int(jdata.get("actIntegral", 0))
+    ico_integral = jdata.get("icoIntegral", "")
+    integral_task_list = jdata.get("integralTaskList", [])
+    done_points = 0
+    if isinstance(integral_task_list, list):
+        for task in integral_task_list:
+            if not isinstance(task, dict):
+                continue
+            if int(task.get("curDone") or 0) >= int(task.get("target") or 0):
+                done_points += int(task.get("pointNum") or 0)
+
+    return {
+        "actIntegral": act_integral,
+        "icoIntegral": ico_integral,
+        "donePoints": done_points,
+    }
 
 
 def send_extra_task(task, account, receive=False):
@@ -332,7 +347,7 @@ def run_activity_tasks(tasks, account, account_line, result_lines):
             detail = format_activity_detail(account_line, task["name"], response_info)
 
             if is_extra_success(response_info):
-                reward = extract_reward_text(response_info["jdata"])
+                reward = extract_reward_text(response_info["jData"])
                 if reward:
                     rewards.extend([item for item in reward.split("、") if item])
                 if response_info["code"] == "4050":
@@ -400,8 +415,11 @@ def main():
         line = f"账号{idx} ({aid})"
 
         try:
-            act_integral = get_current_activity(account)
-            print(f"ℹ️ {line} 当前活跃度 {act_integral}")
+            activity_info = get_current_activity(account)
+            act_integral = activity_info["actIntegral"]
+            ico_integral = activity_info["icoIntegral"]
+            done_points = activity_info["donePoints"]
+            print(f"ℹ️ {line} 当前活跃度 actIntegral={act_integral}, icoIntegral={ico_integral}, 已完成任务积分合计={done_points}")
             if act_integral >= 100:
                 detail = f"⏭️ {line} 今日已经签到完成（当前活跃度 {act_integral}）"
                 print(detail)
