@@ -2,14 +2,14 @@
 
 ## 概述
 
-基于 `curl.txt` 中的请求信息，实现多账号定时签到。账号数据通过 JSON 格式存储在 GitHub Secrets 中，工作流每日自动执行。
+脚本内置组装活动接口请求，实现多账号定时签到、访问任务、领取任务和活跃度奖励领取。账号数据通过 JSON 格式存储在 GitHub Secrets 中，工作流每日自动执行。
 
 ## 文件说明
 
 | 文件 | 路径 | 用途 |
 |------|------|------|
 | 账号 JSON 示例 | `accounts.json.example` | 多账号数据格式模板 |
-| 签到脚本 | `game_sign.py` | 读取 JSON 循环签到 |
+| 签到脚本 | `game_sign.py` | 读取 JSON 循环签到、访问、领取和活跃度奖励 |
 | 工作流配置 | `.github/workflows/game-sign.yml` | GitHub Actions 定时任务 |
 
 ## 请求结构
@@ -44,6 +44,8 @@ POST https://x8m8.ams.game.qq.com/ams/ame/amesvr?ameVersion=0.3&sServiceType=hyr
 | `acctype` | 账号类型（固定 `qc`） |
 | `appid` | 应用 ID |
 | `access_token` | 访问令牌 |
+| `partition` | 区服分区，用于领取任务奖励 |
+| `roleId` | 角色 ID，用于领取任务奖励 |
 
 ## JSON 格式
 
@@ -53,28 +55,36 @@ POST https://x8m8.ams.game.qq.com/ams/ame/amesvr?ameVersion=0.3&sServiceType=hyr
     "openid": "xxx",
     "acctype": "qc",
     "appid": "xxx",
-    "access_token": "xxx"
+    "access_token": "xxx",
+    "partition": "xxx",
+    "roleId": "xxx"
   },
   "1985123": {
     "openid": "yyy",
     "acctype": "qc",
     "appid": "yyy",
-    "access_token": "yyy"
+    "access_token": "yyy",
+    "partition": "yyy",
+    "roleId": "yyy"
   }
 }
 ```
 
-每个 key 为账号 ID（用于通知显示），value 为 Cookie 中的四个字段。
+每个 key 为账号 ID（用于通知显示），value 为账号 Cookie 和角色相关字段。
 
 ## 脚本逻辑
 
 1. 从环境变量 `GAME_ACCOUNTS` 读取 JSON 字符串
 2. 解析为账号对象（key 为账号 ID）
-3. 遍历每个账号组装 Cookie，执行 POST 请求
-4. 解析 `modRet.iRet` 字段判断成功（`"0"`）/已签到（`"100012"`）/失败
-5. 将签到结果写入 `sign_result.txt` 文件
-6. 若设置了 `FEISHU_WEBHOOK` 环境变量，自动发送飞书群机器人通知（全部已签到时不发送明细）
-7. 有账号失败时以非零退出码结束
+3. 每个账号先获取当前活跃度，若 `actIntegral > 100`，直接记录今日已经签到完成并跳过后续接口
+4. 未跳过的账号组装 Cookie，执行签到 POST 请求
+5. 解析 `modRet.iRet` 字段判断成功（`"0"`）/已签到（`"100012"`）/失败
+6. 签到后执行内置的访问任务请求，每个请求之间随机等待 1-2 秒
+7. 访问任务全部执行完后，继续执行内置的领取任务请求，领取请求之间不等待
+8. 领取任务全部执行完后，继续执行内置的活跃度奖励领取请求，活跃度请求之间不等待
+9. 控制台输出完整执行结果，飞书通知只保留签到结果和活跃度奖励结果
+10. 若设置了 `FEISHU_WEBHOOK` 环境变量，自动发送飞书群机器人通知
+11. 有账号失败或附加任务请求失败时以非零退出码结束
 
 ## GitHub Secrets 配置
 
