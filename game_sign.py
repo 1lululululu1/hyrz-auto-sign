@@ -18,7 +18,7 @@ FORM_FIELDS = {
     "g_tk": "1842395457",
 }
 
-EXTRA_SUCCESS_CODES = {"0", "2250", "4300"}
+EXTRA_SUCCESS_CODES = {"0", "2250", "4050", "4300"}
 
 ULINK_TASK_DONE_URL = "https://ulinkact.game.qq.com/app/7335/1824be56cbeb29e7/index.php?route=Index/taskDone&iActId=8265&sAppId=ULINK-AKKJ-784060&game=hyrz&eas_url={eas_url}&e_code=0"
 ULINK_TASK_LOTTERY_URL = "https://ulinkact.game.qq.com/app/7335/1824be56cbeb29e7/index.php?route=Index/taskLotteryNow&iActId=8265&sAppId=ULINK-AKKJ-784060&game=hyrz&eas_url=http%3A%2F%2Fwechatmini.qq.com%2Fhyrz%2Fwxc47b57c32a7fe64b%2Fpages%2Fwelfaresite%2Fwelfaresite%2F&e_code=0"
@@ -179,6 +179,12 @@ def extract_reward_text(value):
         return ""
 
     if isinstance(value, dict):
+        award_list = value.get("awardList")
+        if isinstance(award_list, list):
+            rewards = [extract_reward_text(item) for item in award_list]
+            rewards = [reward for reward in rewards if reward]
+            return "、".join(rewards)
+
         gift_list = value.get("gift_list")
         if isinstance(gift_list, dict):
             gift_name = gift_list.get("sPackageName")
@@ -197,6 +203,20 @@ def extract_reward_text(value):
         return "、".join(rewards)
 
     return str(value)
+
+
+def format_activity_detail(account_line, task_name, response_info):
+    code = response_info["code"]
+    msg = response_info["msg"]
+    reward = extract_reward_text(response_info["jdata"])
+
+    if code == "0":
+        return f"✅ {account_line} 活跃度/{task_name}: {reward}" if reward else f"✅ {account_line} 活跃度/{task_name}: {msg or '领取成功'}"
+    if code == "4050":
+        return f"⏭️ {account_line} 活跃度/{task_name}: {msg or '今日已领取该奖励'}"
+    if is_extra_success(response_info):
+        return f"✅ {account_line} 活跃度/{task_name}: {msg or response_info['summary']}"
+    return f"❌ {account_line} 活跃度/{task_name}: {response_info['summary']}"
 
 
 def is_extra_success(response_info):
@@ -301,6 +321,41 @@ def run_extra_tasks(
     return task_fail_count
 
 
+def run_activity_tasks(tasks, account, account_line, result_lines):
+    task_fail_count = 0
+    rewards = []
+    already_count = 0
+
+    for task in tasks:
+        try:
+            response_info = send_extra_task(task, account, receive=True)
+            detail = format_activity_detail(account_line, task["name"], response_info)
+
+            if is_extra_success(response_info):
+                reward = extract_reward_text(response_info["jdata"])
+                if reward:
+                    rewards.extend([item for item in reward.split("、") if item])
+                if response_info["code"] == "4050":
+                    already_count += 1
+            else:
+                task_fail_count += 1
+        except Exception as e:
+            detail = f"❌ {account_line} 活跃度/{task['name']}: {e}"
+            task_fail_count += 1
+
+        print(detail)
+
+    if rewards:
+        deduped_rewards = list(dict.fromkeys(rewards))
+        result_lines.append(f"✅ {account_line} 活跃度奖励 🎁{'、'.join(deduped_rewards)}")
+    elif already_count == len(tasks):
+        result_lines.append(f"⏭️ {account_line} 活跃度奖励今日已领取")
+    elif task_fail_count:
+        result_lines.append(f"❌ {account_line} 活跃度奖励领取异常")
+
+    return task_fail_count
+
+
 def send_feishu_notification(webhook_url, content):
     """发送飞书机器人通知"""
     payload = json.dumps({
@@ -346,7 +401,8 @@ def main():
 
         try:
             act_integral = get_current_activity(account)
-            if act_integral > 100:
+            print(f"ℹ️ {line} 当前活跃度 {act_integral}")
+            if act_integral >= 100:
                 detail = f"⏭️ {line} 今日已经签到完成（当前活跃度 {act_integral}）"
                 print(detail)
                 result_lines.append(detail)
@@ -421,17 +477,7 @@ def main():
             sleep_between=False,
             keep_success_log=False,
         )
-        task_fail_count += run_extra_tasks(
-            ACTIVITY_TASKS,
-            account,
-            line,
-            "活跃度",
-            result_lines,
-            receive=True,
-            sleep_between=False,
-            keep_success_log=True,
-            show_reward=True,
-        )
+        task_fail_count += run_activity_tasks(ACTIVITY_TASKS, account, line, result_lines)
 
     total = len(accounts)
     summary_parts = []
