@@ -5,6 +5,7 @@ import urllib.request
 import urllib.parse
 import sys
 import time
+from datetime import datetime, timedelta, timezone
 
 URL = "https://x8m8.ams.game.qq.com/ams/ame/amesvr?ameVersion=0.3&sServiceType=hyrz&iActivityId=576370&game=hyrz&eas_url=http%3A%2F%2Fwechatmini.qq.com%2Fhyrz%2Fwxc47b57c32a7fe64b%2Fpages%2Fwelfaresite%2Fwelfaresite%2F&e_code=0"
 
@@ -18,12 +19,14 @@ FORM_FIELDS = {
     "g_tk": "1842395457",
 }
 
+BEIJING_TZ = timezone(timedelta(hours=8))
 EXTRA_SUCCESS_CODES = {"0", "2250", "4050", "4300"}
 
 ULINK_TASK_DONE_URL = "https://ulinkact.game.qq.com/app/7335/1824be56cbeb29e7/index.php?route=Index/taskDone&iActId=8265&sAppId=ULINK-AKKJ-784060&game=hyrz&eas_url={eas_url}&e_code=0"
 ULINK_TASK_LOTTERY_URL = "https://ulinkact.game.qq.com/app/7335/1824be56cbeb29e7/index.php?route=Index/taskLotteryNow&iActId=8265&sAppId=ULINK-AKKJ-784060&game=hyrz&eas_url=http%3A%2F%2Fwechatmini.qq.com%2Fhyrz%2Fwxc47b57c32a7fe64b%2Fpages%2Fwelfaresite%2Fwelfaresite%2F&e_code=0"
 ULINK_ACTIVITY_URL = "https://ulinkact.game.qq.com/app/7335/1824be56cbeb29e7/index.php?route=Welfare/getTodayActGiftNow&iActId=8265&sAppId=ULINK-AKKJ-784060&game=hyrz&eas_url=http%3A%2F%2Fwechatmini.qq.com%2Fhyrz%2Fwxc47b57c32a7fe64b%2Fpages%2Fwelfaresite%2Fwelfaresite%2F&e_code=0"
 ULINK_ACTIVITY_INFO_URL = "https://ulinkact.game.qq.com/app/7335/1824be56cbeb29e7/index.php?route=Welfare/getTodayActInfo&iActId=8265&sAppId=ULINK-AKKJ-784060&game=hyrz&eas_url=http%3A%2F%2Fwechatmini.qq.com%2Fhyrz%2Fwxc47b57c32a7fe64b%2Fpages%2Fwelfaresite%2Fwelfaresite%2F&e_code=0"
+ULINK_LOTTERY_URL = "https://ulinkact.game.qq.com/app/7335/1824be56cbeb29e7/index.php?route=Welfare/userLuckyDraw&iActId=8265&sAppId=ULINK-AKKJ-784060&game=hyrz&eas_url=http%3A%2F%2Fwechatmini.qq.com%2Fhyrz%2Fwxc47b57c32a7fe64b%2Fpages%2Fwelfaresite%2Fwelfaresite%2F&e_code=0"
 
 ACCESS_TASKS = [
     {
@@ -114,6 +117,24 @@ def build_cookie(account):
     appid = account.get("appid", "")
     access_token = account.get("access_token", "")
     return f"openid={openid};acctype={acctype};appid={appid};access_token={access_token}"
+
+
+def parse_bool(value, default=True):
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() not in ("0", "false", "no", "off", "关闭")
+    return bool(value)
+
+
+def is_lottery_enabled(account):
+    if "enable_lottery" in account:
+        return parse_bool(account.get("enable_lottery"))
+    if "draw_lottery" in account:
+        return parse_bool(account.get("draw_lottery"))
+    return True
 
 
 def build_role_form_fields(account, index=None):
@@ -256,6 +277,16 @@ def build_activity_info_request(account):
     return req
 
 
+def build_lottery_request(account):
+    data = urllib.parse.urlencode(build_role_form_fields(account)).encode("utf-8")
+    req = urllib.request.Request(ULINK_LOTTERY_URL, data=data, method="POST")
+    req.add_header("xweb_xhr", "1")
+    req.add_header("X-WECHAT-HOSTSIGN", X_WECHAT_HOSTSIGN)
+    req.add_header("Cookie", build_cookie(account))
+    req.add_header("Content-Type", "application/x-www-form-urlencoded")
+    return req
+
+
 def get_current_activity(account):
     req = build_activity_info_request(account)
     with urllib.request.urlopen(req, timeout=30) as resp:
@@ -286,6 +317,31 @@ def get_current_activity(account):
         "icoIntegral": ico_integral,
         "donePoints": done_points,
     }
+
+
+def run_lottery(account, account_line, result_lines):
+    try:
+        req = build_lottery_request(account)
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            charset = resp.headers.get_content_charset() or "utf-8"
+            body = resp.read().decode(charset, errors="replace")
+
+        response_info = parse_response(body)
+        reward = extract_reward_text(response_info["jdata"])
+
+        if is_extra_success(response_info):
+            detail = f"✅ {account_line} 抽奖奖励 🎁{reward}" if reward else f"✅ {account_line} 抽奖: {response_info['summary']}"
+            print(detail)
+            result_lines.append(detail)
+            return 0
+
+        detail = f"❌ {account_line} 抽奖: {response_info['summary']}"
+    except Exception as e:
+        detail = f"❌ {account_line} 抽奖异常: {e}"
+
+    print(detail)
+    result_lines.append(detail)
+    return 1
 
 
 def send_extra_task(task, account, receive=False):
@@ -369,6 +425,11 @@ def run_activity_tasks(tasks, account, account_line, result_lines):
         result_lines.append(f"❌ {account_line} 活跃度奖励领取异常")
 
     return task_fail_count
+
+
+def should_run_lottery(account, today=None):
+    today = today or datetime.now(BEIJING_TZ)
+    return today.day > 15 and is_lottery_enabled(account)
 
 
 def send_feishu_notification(webhook_url, content):
@@ -496,6 +557,11 @@ def main():
             keep_success_log=False,
         )
         task_fail_count += run_activity_tasks(ACTIVITY_TASKS, account, line, result_lines)
+
+        if should_run_lottery(account):
+            task_fail_count += run_lottery(account, line, result_lines)
+        else:
+            print(f"⏭️ {line} 未执行抽奖（日期未超过15日或账号已关闭抽奖）")
 
     total = len(accounts)
     summary_parts = []

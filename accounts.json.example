@@ -5,7 +5,8 @@
     "appid": "bbb1",
     "access_token": "ccc1",
     "partition": "ddd1",
-    "roleId": "eee1"
+    "roleId": "eee1",
+    "enable_lottery": true
   },
   "1985123":{
     "openid": "aaa2",
@@ -13,6 +14,7 @@
     "appid": "bbb2",
     "access_token": "ccc2",
     "partition": "ddd2",
-    "roleId": "eee2"
+    "roleId": "eee2",
+    "enable_lottery": true
   }
 }

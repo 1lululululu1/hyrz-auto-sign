@@ -46,6 +46,7 @@ POST https://x8m8.ams.game.qq.com/ams/ame/amesvr?ameVersion=0.3&sServiceType=hyr
 | `access_token` | 访问令牌 |
 | `partition` | 区服分区，用于领取任务奖励 |
 | `roleId` | 角色 ID，用于领取任务奖励 |
+| `enable_lottery` | 是否开启 15 日后的抽奖，默认 `true` |
 
 ## JSON 格式
 
@@ -57,7 +58,8 @@ POST https://x8m8.ams.game.qq.com/ams/ame/amesvr?ameVersion=0.3&sServiceType=hyr
     "appid": "xxx",
     "access_token": "xxx",
     "partition": "xxx",
-    "roleId": "xxx"
+    "roleId": "xxx",
+    "enable_lottery": true
   },
   "1985123": {
     "openid": "yyy",
@@ -65,7 +67,8 @@ POST https://x8m8.ams.game.qq.com/ams/ame/amesvr?ameVersion=0.3&sServiceType=hyr
     "appid": "yyy",
     "access_token": "yyy",
     "partition": "yyy",
-    "roleId": "yyy"
+    "roleId": "yyy",
+    "enable_lottery": true
   }
 }
 ```
@@ -82,9 +85,10 @@ POST https://x8m8.ams.game.qq.com/ams/ame/amesvr?ameVersion=0.3&sServiceType=hyr
 6. 签到后执行内置的访问任务请求，每个请求之间随机等待 1-2 秒
 7. 访问任务全部执行完后，继续执行内置的领取任务请求，领取请求之间不等待
 8. 领取任务全部执行完后，继续执行内置的活跃度奖励领取请求，活跃度请求之间不等待
-9. 控制台输出完整执行结果，飞书通知只保留签到结果和按账号汇总后的活跃度奖励文案
-10. 若设置了 `FEISHU_WEBHOOK` 环境变量，自动发送飞书群机器人通知
-11. 有账号失败或附加任务请求失败时以非零退出码结束
+9. 活跃度奖励领取后，若今天日期大于 15 日且账号未关闭抽奖，则执行抽奖并提取 `jData.sPackageName`
+10. 控制台输出完整执行结果，飞书通知只保留签到结果、按账号汇总后的活跃度奖励文案和抽奖奖励文案
+11. 若设置了 `FEISHU_WEBHOOK` 环境变量，自动发送飞书群机器人通知
+12. 有账号失败或附加任务请求失败时以非零退出码结束
 
 ## GitHub Secrets 配置
 
