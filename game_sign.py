@@ -140,26 +140,26 @@ def build_role_form_fields(account, index=None):
 
 def parse_response(body):
     if not body:
-        return {"code": "", "msg": "", "jdata": None, "summary": "无响应内容"}
+        return {"code": "", "msg": "", "jData": None, "summary": "无响应内容"}
 
     try:
         data = json.loads(body)
     except json.JSONDecodeError:
-        return {"code": "", "msg": "", "jdata": None, "summary": body[:120]}
+        return {"code": "", "msg": "", "jData": None, "summary": body[:120]}
 
     if not isinstance(data, dict):
         summary = str(data)[:120]
-        return {"code": "", "msg": "", "jdata": None, "summary": summary}
+        return {"code": "", "msg": "", "jData": None, "summary": summary}
 
     mod_ret = data.get("modRet")
     if isinstance(mod_ret, dict):
         code = mod_ret.get("iRet", "")
         msg = mod_ret.get("sMsg") or mod_ret.get("msg") or ""
-        jdata = mod_ret.get("jData")
+        jData = mod_ret.get("jData")
     else:
         code = data.get("iRet", data.get("ret", data.get("code", "")))
         msg = data.get("sMsg") or data.get("msg") or data.get("message") or ""
-        jdata = data.get("jData")
+        jData = data.get("jData")
 
     parts = []
     if code != "":
@@ -167,7 +167,7 @@ def parse_response(body):
     if msg:
         parts.append(str(msg))
     summary = "，".join(parts) if parts else body[:120]
-    return {"code": str(code) if code != "" else "", "msg": msg, "jdata": jdata, "summary": summary}
+    return {"code": str(code) if code != "" else "", "msg": msg, "jData": jData, "summary": summary}
 
 
 def summarize_response(body):
@@ -208,7 +208,7 @@ def extract_reward_text(value):
 def format_activity_detail(account_line, task_name, response_info):
     code = response_info["code"]
     msg = response_info["msg"]
-    reward = extract_reward_text(response_info["jdata"])
+    reward = extract_reward_text(response_info["jData"])
 
     if code == "0":
         return f"✅ {account_line} 活跃度/{task_name}: {reward}" if reward else f"✅ {account_line} 活跃度/{task_name}: {msg or '领取成功'}"
@@ -266,13 +266,13 @@ def get_current_activity(account):
     if not is_extra_success(response_info):
         raise ValueError(response_info["summary"])
 
-    jdata = response_info["jData"]
-    if not isinstance(jdata, dict):
+    jData = response_info["jData"]
+    if not isinstance(jData, dict):
         raise ValueError("获取当前活跃度响应缺少 jData")
 
-    act_integral = int(jdata.get("actIntegral", 0))
-    ico_integral = jdata.get("icoIntegral", "")
-    integral_task_list = jdata.get("integralTaskList", [])
+    act_integral = int(jData.get("actIntegral", 0))
+    ico_integral = jData.get("icoIntegral", "")
+    integral_task_list = jData.get("integralTaskList", [])
     done_points = 0
     if isinstance(integral_task_list, list):
         for task in integral_task_list:
@@ -314,7 +314,7 @@ def run_extra_tasks(
             response_info = send_extra_task(task, account, receive=receive)
             response_summary = response_info["summary"]
             if is_extra_success(response_info):
-                reward = extract_reward_text(response_info["jdata"]) if show_reward else ""
+                reward = extract_reward_text(response_info["jData"]) if show_reward else ""
                 gift_text = f" 🎁{reward}" if reward else ""
                 detail = f"✅ {account_line} {stage_name}/{task['name']}: {response_summary}{gift_text}"
             else:
@@ -450,8 +450,8 @@ def main():
 
                 if ret_code == "0":
                     # 签到成功，提取奖励
-                    jdata = mod_ret.get("jData", {})
-                    gift_list = jdata.get("gift_list", {})
+                    jData = mod_ret.get("jData", {})
+                    gift_list = jData.get("gift_list", {})
                     gifts = gift_list.get("sPackageName", "")
                     gift_items = [g.strip() for g in gifts.split(",") if g.strip()]
                     gift_short = "、".join(gift_items[:3])
