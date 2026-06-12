@@ -5,7 +5,7 @@ import urllib.request
 import urllib.parse
 import sys
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta, timezone
 
 URL = "https://x8m8.ams.game.qq.com/ams/ame/amesvr?ameVersion=0.3&sServiceType=hyrz&iActivityId=576370&game=hyrz&eas_url=http%3A%2F%2Fwechatmini.qq.com%2Fhyrz%2Fwxc47b57c32a7fe64b%2Fpages%2Fwelfaresite%2Fwelfaresite%2F&e_code=0"
 
@@ -27,6 +27,8 @@ ULINK_TASK_LOTTERY_URL = "https://ulinkact.game.qq.com/app/7335/1824be56cbeb29e7
 ULINK_ACTIVITY_URL = "https://ulinkact.game.qq.com/app/7335/1824be56cbeb29e7/index.php?route=Welfare/getTodayActGiftNow&iActId=8265&sAppId=ULINK-AKKJ-784060&game=hyrz&eas_url=http%3A%2F%2Fwechatmini.qq.com%2Fhyrz%2Fwxc47b57c32a7fe64b%2Fpages%2Fwelfaresite%2Fwelfaresite%2F&e_code=0"
 ULINK_ACTIVITY_INFO_URL = "https://ulinkact.game.qq.com/app/7335/1824be56cbeb29e7/index.php?route=Welfare/getTodayActInfo&iActId=8265&sAppId=ULINK-AKKJ-784060&game=hyrz&eas_url=http%3A%2F%2Fwechatmini.qq.com%2Fhyrz%2Fwxc47b57c32a7fe64b%2Fpages%2Fwelfaresite%2Fwelfaresite%2F&e_code=0"
 ULINK_LOTTERY_URL = "https://ulinkact.game.qq.com/app/7335/1824be56cbeb29e7/index.php?route=Welfare/userLuckyDraw&iActId=8265&sAppId=ULINK-AKKJ-784060&game=hyrz&eas_url=http%3A%2F%2Fwechatmini.qq.com%2Fhyrz%2Fwxc47b57c32a7fe64b%2Fpages%2Fwelfaresite%2Fwelfaresite%2F&e_code=0"
+ULINK_EXCHANGE_GIFT_INFO_URL = "https://ulinkact.game.qq.com/app/7335/1824be56cbeb29e7/index.php?route=Welfare/getExchangeGiftInfo&iActId=8265&sAppId=ULINK-AKKJ-784060&game=hyrz&eas_url=http%3A%2F%2Fwechatmini.qq.com%2Fhyrz%2Fwxc47b57c32a7fe64b%2Fpages%2Fwelfaresite%2Fwelfaresite%2F&e_code=0"
+ULINK_EXCHANGE_GIFT_URL = "https://ulinkact.game.qq.com/app/7335/1824be56cbeb29e7/index.php?route=Welfare/exchangeGiftNow&iActId=8265&sAppId=ULINK-AKKJ-784060&game=hyrz&eas_url=http%3A%2F%2Fwechatmini.qq.com%2Fhyrz%2Fwxc47b57c32a7fe64b%2Fpages%2Fwelfaresite%2Fwelfaresite%2F&e_code=0"
 
 ACCESS_TASKS = [
     {
@@ -287,6 +289,136 @@ def build_lottery_request(account):
     return req
 
 
+def build_exchange_gift_info_request(account):
+    form_fields = {
+        "page": "1",
+        "pageSize": "10",
+        "iActId": "8265",
+        "sAppId": "ULINK-AKKJ-784060",
+        "g_tk": "1842395457",
+    }
+    data = urllib.parse.urlencode(form_fields).encode("utf-8")
+    req = urllib.request.Request(ULINK_EXCHANGE_GIFT_INFO_URL, data=data, method="POST")
+    req.add_header("xweb_xhr", "1")
+    req.add_header("X-WECHAT-HOSTSIGN", X_WECHAT_HOSTSIGN)
+    req.add_header("Cookie", build_cookie(account))
+    req.add_header("Content-Type", "application/x-www-form-urlencoded")
+    return req
+
+
+def build_exchange_gift_request(account, package_id):
+    form_fields = {
+        "iPackageId": str(package_id),
+        "area": "2",
+        "platId": "0",
+        "partition": str(account.get("partition")),
+        "roleId": str(account.get("roleId")),
+        "iActId": "8265",
+        "sAppId": "ULINK-AKKJ-784060",
+        "g_tk": "1842395457",
+    }
+    data = urllib.parse.urlencode(form_fields).encode("utf-8")
+    req = urllib.request.Request(ULINK_EXCHANGE_GIFT_URL, data=data, method="POST")
+    req.add_header("xweb_xhr", "1")
+    req.add_header("X-WECHAT-HOSTSIGN", X_WECHAT_HOSTSIGN)
+    req.add_header("Cookie", build_cookie(account))
+    req.add_header("Content-Type", "application/x-www-form-urlencoded")
+    return req
+
+
+def get_exchange_gift_info(account):
+    req = build_exchange_gift_info_request(account)
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        charset = resp.headers.get_content_charset() or "utf-8"
+        body = resp.read().decode(charset, errors="replace")
+
+    response_info = parse_response(body)
+    if not is_extra_success(response_info):
+        raise ValueError(response_info["summary"])
+
+    jData = response_info["jData"]
+    if not isinstance(jData, list):
+        raise ValueError("积分兑换池响应格式错误")
+
+    gold_gift = None
+    for item in jData:
+        if not isinstance(item, dict):
+            continue
+        if item.get("id") == 677:
+            gold_gift = item
+            break
+
+    if not gold_gift:
+        raise ValueError("未找到金币兑换项")
+
+    config = gold_gift.get("config", {})
+    only_i_month_left = int(config.get("onlyIMonthLeft", 0))
+    price = int(config.get("price", 0))
+    package_id = config.get("iPackageId")
+
+    return {
+        "onlyIMonthLeft": only_i_month_left,
+        "price": price,
+        "packageId": package_id,
+        "name": gold_gift.get("name", "金币"),
+    }
+
+
+def exchange_gold_gift(account, package_id):
+    req = build_exchange_gift_request(account, package_id)
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        charset = resp.headers.get_content_charset() or "utf-8"
+        body = resp.read().decode(charset, errors="replace")
+    return parse_response(body)
+
+
+def run_exchange_and_lottery(account, account_line, ico_integral, result_lines):
+    if not is_lottery_enabled(account):
+        print(f"⏭️ {account_line} 已关闭积分兑换和抽奖功能")
+        return 0
+
+    task_fail_count = 0
+
+    try:
+        gift_info = get_exchange_gift_info(account)
+        only_i_month_left = gift_info["onlyIMonthLeft"]
+        price = gift_info["price"]
+        package_id = gift_info["packageId"]
+        gift_name = gift_info["name"]
+
+        if ico_integral >= price and only_i_month_left > 0:
+            try:
+                response_info = exchange_gold_gift(account, package_id)
+                if is_extra_success(response_info):
+                    detail = f"✅ {account_line} 积分兑换 🎁{gift_name}"
+                    print(detail)
+                    result_lines.append(detail)
+                else:
+                    detail = f"❌ {account_line} 积分兑换: {response_info['summary']}"
+                    print(detail)
+                    result_lines.append(detail)
+                    task_fail_count += 1
+            except Exception as e:
+                detail = f"❌ {account_line} 积分兑换异常: {e}"
+                print(detail)
+                result_lines.append(detail)
+                task_fail_count += 1
+        elif only_i_month_left <= 0:
+            print(f"ℹ️ {account_line} 本月已兑换金币，当前积分 {ico_integral}")
+            if ico_integral >= 100:
+                task_fail_count += run_lottery(account, account_line, result_lines)
+            else:
+                print(f"⏭️ {account_line} 积分不足100，跳过抽奖")
+        else:
+            print(f"⏭️ {account_line} 积分不足 {price}，当前 {ico_integral}")
+    except Exception as e:
+        detail = f"❌ {account_line} 获取兑换池信息异常: {e}"
+        print(detail)
+        task_fail_count += 1
+
+    return task_fail_count
+
+
 def get_current_activity(account):
     req = build_activity_info_request(account)
     with urllib.request.urlopen(req, timeout=30) as resp:
@@ -327,7 +459,7 @@ def run_lottery(account, account_line, result_lines):
             body = resp.read().decode(charset, errors="replace")
 
         response_info = parse_response(body)
-        reward = extract_reward_text(response_info["jdata"])
+        reward = extract_reward_text(response_info["jData"])
 
         if is_extra_success(response_info):
             detail = f"✅ {account_line} 抽奖奖励 🎁{reward}" if reward else f"✅ {account_line} 抽奖: {response_info['summary']}"
@@ -427,11 +559,6 @@ def run_activity_tasks(tasks, account, account_line, result_lines):
     return task_fail_count
 
 
-def should_run_lottery(account, today=None):
-    today = today or datetime.now(BEIJING_TZ)
-    return today.day > 15 and is_lottery_enabled(account)
-
-
 def send_feishu_notification(webhook_url, content):
     """发送飞书机器人通知"""
     payload = json.dumps({
@@ -474,6 +601,7 @@ def main():
     for idx, (aid, account) in enumerate(accounts.items(), start=1):
         cookie = build_cookie(account)
         line = f"账号{idx} ({aid})"
+        ico_integral = 0
 
         try:
             activity_info = get_current_activity(account)
@@ -558,10 +686,7 @@ def main():
         )
         task_fail_count += run_activity_tasks(ACTIVITY_TASKS, account, line, result_lines)
 
-        if should_run_lottery(account):
-            task_fail_count += run_lottery(account, line, result_lines)
-        else:
-            print(f"⏭️ {line} 未执行抽奖（日期未超过15日或账号已关闭抽奖）")
+        task_fail_count += run_exchange_and_lottery(account, line, int(ico_integral or 0), result_lines)
 
     total = len(accounts)
     summary_parts = []
