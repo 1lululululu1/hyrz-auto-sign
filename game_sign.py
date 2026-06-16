@@ -340,6 +340,10 @@ def get_exchange_gift_info(account):
     if not isinstance(jData, list):
         raise ValueError("积分兑换池响应格式错误")
 
+    # 如果 jData 为空数组，返回 None（表示兑换池为空）
+    if not jData:
+        return None
+
     gold_gift = None
     for item in jData:
         if not isinstance(item, dict):
@@ -348,8 +352,9 @@ def get_exchange_gift_info(account):
             gold_gift = item
             break
 
+    # 如果未找到金币兑换项，返回 None
     if not gold_gift:
-        raise ValueError("未找到金币兑换项")
+        return None
 
     config = gold_gift.get("config", {})
     only_i_month_left = int(config.get("onlyIMonthLeft", 0))
@@ -381,6 +386,16 @@ def run_exchange_and_lottery(account, account_line, ico_integral, result_lines):
 
     try:
         gift_info = get_exchange_gift_info(account)
+
+        # 如果兑换池为空（jData 为空数组或未找到金币兑换项），直接进入抽奖
+        if gift_info is None:
+            print(f"ℹ️ {account_line} 兑换池为空，跳过兑换，当前积分 {ico_integral}")
+            if ico_integral >= 100:
+                task_fail_count += run_lottery(account, account_line, result_lines)
+            else:
+                print(f"⏭️ {account_line} 积分不足100，跳过抽奖")
+            return task_fail_count
+
         only_i_month_left = gift_info["onlyIMonthLeft"]
         price = gift_info["price"]
         package_id = gift_info["packageId"]
